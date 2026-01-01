@@ -1,0 +1,203 @@
+import os
+import json
+import time
+import requests
+from typing import Optional, Dict, Any
+
+GRAPH_VERSION = os.getenv("FB_GRAPH_VERSION", "v20.0")
+GRAPH_BASE = f"https://graph.facebook.com/{GRAPH_VERSION}"
+
+APP_ID = os.getenv("FB_APP_ID")
+APP_SECRET = os.getenv("FB_APP_SECRET")
+PAGE_ID = os.getenv("FB_PAGE_ID")  # optional; dacă nu e setat, îl găsim din /me/accounts după nume
+PAGE_NAME = os.getenv("FB_PAGE_NAME")  # optional fallback dacă nu ai PAGE_ID
+TOKEN_STORE_PATH = os.getenv("FB_TOKEN_STORE", "facebook_tokens.json")
+
+# Dacă refresh-ul e pornit, când mai sunt sub X zile până la expirare -> re-exchange
+REFRESH_IF_LESS_THAN_DAYS = int(os.getenv("FB_REFRESH_DAYS", "7"))
+
+# Pentru calls
+TIMEOUT = 20
+
+
+class FBTokenError(RuntimeError):
+    pass
+
+
+def _require_env():
+    missing = [k for k in ["FB_APP_ID", "FB_APP_SECRET"] if not os.getenv(k)]
+    if missing:
+        raise FBTokenError(f"Lipsesc variabilele de mediu: {', '.join(missing)}")
+
+
+def exchange_for_long_lived_user_token(user_token: str) -> Dict[str, Any]:
+    """
+    Exchange short-lived (sau chiar long-lived) user token -> long-lived user token.
+    Endpoint: /oauth/access_token?grant_type=fb_exchange_token...
+    """
+    _require_env()
+    url = f"{GRAPH_BASE}/oauth/access_token"
+    params = {
+        "grant_type": "fb_exchange_token",
+        "client_id": APP_ID,
+        "client_secret": APP_SECRET,
+        "fb_exchange_token": user_token,
+    }
+    r = requests.get(url, params=params, timeout=TIMEOUT)
+    if r.status_code != 200:
+        raise FBTokenError(f"Exchange failed: {r.status_code} {r.text}")
+    data = r.json()
+    # data: { "access_token": "...", "token_type":"bearer", "expires_in": 5184000 }
+    return data
+
+
+def debug_token(input_token: str) -> Dict[str, Any]:
+    """
+    Debug token metadata (expires_at, is_valid, scopes).
+    Endpoint: /debug_token?input_token=...&access_token={app_id}|{app_secret}
+    """
+    _require_env()
+    app_access_token = f"{APP_ID}|{APP_SECRET}"
+    url = f"{GRAPH_BASE}/debug_token"
+    params = {
+        "input_token": input_token,
+        "access_token": app_access_token,
+    }
+    r = requests.get(url, params=params, timeout=TIMEOUT)
+    if r.status_code != 200:
+        raise FBTokenError(f"Debug failed: {r.status_code} {r.text}")
+    return r.json()
+
+
+def get_pages_for_user(long_lived_user_token: str) -> Dict[str, Any]:
+    """
+    Listează paginile userului: /me/accounts
+    Returnează JSON cu data=[{id,name,access_token,...},...]
+    """
+    url = f"{GRAPH_BASE}/me/accounts"
+    params = {"access_token": long_lived_user_token}
+    r = requests.get(url, params=params, timeout=TIMEOUT)
+    if r.status_code != 200:
+        raise FBTokenError(f"/me/accounts failed: {r.status_code} {r.text}")
+    return r.json()
+
+
+def pick_page_token(accounts_json: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Alege pagina după PAGE_ID sau PAGE_NAME și returnează {"page_id":..., "page_access_token":...}
+    """
+    pages = accounts_json.get("data", []) or []
+    if not pages:
+        raise FBTokenError("Nu am găsit pagini în /me/accounts. Ești admin pe Page? Ai permisiunile corecte?")
+
+    if PAGE_ID:
+        for p in pages:
+            if str(p.get("id")) == str(PAGE_ID):
+                return {"page_id": p["id"], "page_access_token": p["access_token"], "page_name": p.get("name", "")}
+        raise FBTokenError(f"PAGE_ID={PAGE_ID} nu a fost găsit în /me/accounts.")
+
+    if PAGE_NAME:
+        for p in pages:
+            if (p.get("name") or "").strip().lower() == PAGE_NAME.strip().lower():
+                return {"page_id": p["id"], "page_access_token": p["access_token"], "page_name": p.get("name", "")}
+        raise FBTokenError(f"PAGE_NAME='{PAGE_NAME}' nu a fost găsit în /me/accounts.")
+
+    # fallback: prima pagină
+    p = pages[0]
+    return {"page_id": p["id"], "page_access_token": p["access_token"], "page_name": p.get("name", "")}
+
+
+def load_store() -> Dict[str, Any]:
+    if not os.path.exists(TOKEN_STORE_PATH):
+        return {}
+    with open(TOKEN_STORE_PATH, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_store(data: Dict[str, Any]) -> None:
+    tmp = TOKEN_STORE_PATH + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, TOKEN_STORE_PATH)
+
+
+def expires_in_days(expires_at_unix: Optional[int]) -> Optional[float]:
+    if not expires_at_unix:
+        return None
+    return (expires_at_unix - int(time.time())) / 86400.0
+
+
+def ensure_tokens(
+    initial_short_user_token: Optional[str] = None,
+    force_refresh: bool = False
+) -> Dict[str, Any]:
+    """
+    - dacă există store cu long_lived_user_token și încă e OK -> îl folosește
+    - dacă e aproape de expirare -> re-exchange
+    - apoi ia page token și îl salvează
+    """
+    store = load_store()
+
+    # 1) ia user token existent sau cere bootstrap
+    user_token = store.get("long_lived_user_token")
+    if not user_token:
+        if not initial_short_user_token:
+            raise FBTokenError(
+                "Nu există long_lived_user_token în store și nu ai furnizat initial_short_user_token.\n"
+                "Rulează o dată cu SHORT token obținut din OAuth / Graph API Explorer."
+            )
+        exch = exchange_for_long_lived_user_token(initial_short_user_token)
+        user_token = exch["access_token"]
+        store["long_lived_user_token"] = user_token
+
+    # 2) debug user token
+    user_dbg = debug_token(user_token).get("data", {})
+    store["user_token_debug"] = user_dbg
+
+    user_expires_at = user_dbg.get("expires_at")  # unix
+    days_left = expires_in_days(user_expires_at)
+
+    # 3) refresh dacă e cerut / aproape expirat
+    if force_refresh or (days_left is not None and days_left < REFRESH_IF_LESS_THAN_DAYS):
+        exch = exchange_for_long_lived_user_token(user_token)
+        user_token = exch["access_token"]
+        store["long_lived_user_token"] = user_token
+
+        user_dbg = debug_token(user_token).get("data", {})
+        store["user_token_debug"] = user_dbg
+        user_expires_at = user_dbg.get("expires_at")
+        days_left = expires_in_days(user_expires_at)
+
+    # 4) ia Page token din /me/accounts (derivat din long-lived user token)
+    accounts = get_pages_for_user(user_token)
+    store["me_accounts"] = {"count": len(accounts.get("data", []) or [])}
+
+    picked = pick_page_token(accounts)
+    store["page_id"] = picked["page_id"]
+    store["page_name"] = picked.get("page_name", "")
+    store["page_access_token"] = picked["page_access_token"]
+
+    # 5) debug page token (util pentru expires_at + permisiuni)
+    page_dbg = debug_token(store["page_access_token"]).get("data", {})
+    store["page_token_debug"] = page_dbg
+
+    save_store(store)
+
+    return {
+        "page_id": store["page_id"],
+        "page_name": store.get("page_name", ""),
+        "page_access_token": store["page_access_token"],
+        "user_days_left": days_left,
+        "user_expires_at": user_expires_at,
+        "page_expires_at": page_dbg.get("expires_at"),
+        "scopes": page_dbg.get("scopes", []),
+        "store_path": os.path.abspath(TOKEN_STORE_PATH),
+    }
+
+
+if __name__ == "__main__":
+    # 1) Prima rulare: setezi env FB_SHORT_USER_TOKEN (obținut din OAuth/Graph Explorer) și rulezi scriptul.
+    # 2) Ulterior: rulezi fără FB_SHORT_USER_TOKEN; va folosi store-ul și va face refresh când e nevoie.
+    short = os.getenv("FB_SHORT_USER_TOKEN")
+    result = ensure_tokens(initial_short_user_token=short, force_refresh=False)
+    print(json.dumps(result, indent=2))
