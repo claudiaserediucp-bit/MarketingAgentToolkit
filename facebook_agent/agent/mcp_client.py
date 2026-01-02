@@ -65,9 +65,18 @@ class MCPClient:
         await self.proc.stdin.drain()
 
         try:
-            line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=30)
+            line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=60)
         except asyncio.TimeoutError:
-            return PostResult(success=False, post_id=None, page_id=page_id, error="Timeout waiting for MCP response")
+            stderr_line = None
+            if self.proc.stderr:
+                try:
+                    stderr_line = await asyncio.wait_for(self.proc.stderr.readline(), timeout=1)
+                except Exception:
+                    stderr_line = None
+            err_msg = "Timeout waiting for MCP response"
+            if stderr_line:
+                err_msg += f" | stderr: {stderr_line.decode('utf-8', 'ignore').strip()}"
+            return PostResult(success=False, post_id=None, page_id=page_id, error=err_msg)
 
         try:
             resp = json.loads(line.decode("utf-8"))
