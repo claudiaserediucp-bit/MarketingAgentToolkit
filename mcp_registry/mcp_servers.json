@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "facebook_mcp_nas": {
+      "command": "ssh",
+      "args": [
+        "-p",
+        "1313",
+        "adiciok@ds2018",
+        "cd /volume1/docker/facebook-mcp/facebook-mcp-server && docker-compose run --rm facebook-mcp"
+      ]
+    }
+  }
+}
+
