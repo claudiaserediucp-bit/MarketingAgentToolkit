@@ -8,5 +8,5 @@ Current entry:
   - Command: `ssh`
   - Args: `-p 1313 adiciok@ds2018 "cd /volume1/docker/facebook-mcp/facebook-mcp-server && docker-compose run --rm facebook-mcp"`
 
-To use in a client (e.g., Claude Desktop), point your MCP config to `MCP/registry/mcp_servers.json`.
+Point your MCP client config at `registry/mcp_servers.json`.
 
