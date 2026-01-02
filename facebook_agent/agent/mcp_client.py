@@ -25,12 +25,21 @@ class MCPClient:
         self.cfg = cfg
         self.proc: Optional[asyncio.subprocess.Process] = None
         self.fake_mode = fake_mode if fake_mode is not None else bool(os.getenv("MCP_FAKE_MODE", "1") != "0")
+        self.greeting: Optional[str] = None
 
     async def __aenter__(self):
         if not self.fake_mode:
             self.proc = await asyncio.create_subprocess_exec(
                 self.cfg.command, *self.cfg.args, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE
             )
+            # Try to read an optional greeting/handshake line (non-fatal on timeout)
+            if self.proc and self.proc.stdout:
+                try:
+                    line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=5)
+                    if line:
+                        self.greeting = line.decode("utf-8", "ignore").strip()
+                except asyncio.TimeoutError:
+                    self.greeting = None
         return self
 
     async def __aexit__(self, exc_type, exc, tb):
@@ -64,15 +73,44 @@ class MCPClient:
         self.proc.stdin.write(payload)
         await self.proc.stdin.drain()
 
+        # Read lines until a JSON-RPC response arrives or timeout
+        resp = None
+        last_line = None
         try:
-            line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=30)
-        except asyncio.TimeoutError:
-            return PostResult(success=False, post_id=None, page_id=page_id, error="Timeout waiting for MCP response")
+            for _ in range(200):  # safeguard
+                try:
+                    line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=60)
+                except asyncio.TimeoutError:
+                    break
+                if not line:
+                    continue
+                decoded = line.decode("utf-8", "ignore").strip()
+                last_line = decoded
+                if not decoded:
+                    continue
+                try:
+                    resp = json.loads(decoded)
+                    break
+                except JSONDecodeError:
+                    continue
+        except Exception:
+            pass
 
-        try:
-            resp = json.loads(line.decode("utf-8"))
-        except JSONDecodeError:
-            return PostResult(success=False, post_id=None, page_id=page_id, error=f"Invalid MCP response: {line!r}")
+        if resp is None:
+            stderr_line = None
+            if self.proc.stderr:
+                try:
+                    stderr_raw = await asyncio.wait_for(self.proc.stderr.readline(), timeout=2)
+                    if stderr_raw:
+                        stderr_line = stderr_raw.decode("utf-8", "ignore").strip()
+                except Exception:
+                    stderr_line = None
+            err_msg = "Timeout waiting for MCP response"
+            if last_line:
+                err_msg += f" | last stdout: {last_line}"
+            if stderr_line:
+                err_msg += f" | stderr: {stderr_line}"
+            return PostResult(success=False, post_id=None, page_id=page_id, error=err_msg)
 
         if "error" in resp:
             return PostResult(success=False, post_id=None, page_id=page_id, error=str(resp["error"]))
