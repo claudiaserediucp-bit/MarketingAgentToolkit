@@ -5,6 +5,10 @@ import os
 import uuid
 from typing import List, Optional
 
+import json
+from json import JSONDecodeError
+from typing import List, Optional
+
 from .models import FacebookMCPConfig, PostResult
 
 
@@ -12,9 +16,9 @@ class MCPClient:
     """
     Minimal MCP STDIO client wrapper.
 
-    NOTE: This Phase-1 implementation provides a simulation mode (default) because
-    a full MCP protocol client is out of scope here. For production, replace the
-    _post_via_mcp stub with a real MCP client call.
+    NOTE: This Phase-1 implementation provides a simulation mode (default). When
+    MCP_FAKE_MODE=0 it will invoke the remote MCP server (Synology) over STDIO
+    using JSON-RPC (FastMCP). Tool name expected: post_to_facebook(message).
     """
 
     def __init__(self, cfg: FacebookMCPConfig, fake_mode: Optional[bool] = None):
@@ -46,12 +50,34 @@ class MCPClient:
         if self.fake_mode:
             return PostResult(success=True, post_id=f"sim-{uuid.uuid4().hex}", page_id=page_id, error=None)
 
-        # Placeholder for real MCP interaction
-        tools = await self.list_tools()
-        if "post_to_facebook" not in tools:
-            raise RuntimeError(f"MCP tool 'post_to_facebook' not found. Available: {tools}")
+        # Real MCP JSON-RPC call over STDIO
+        if not self.proc or not self.proc.stdin or not self.proc.stdout:
+            raise RuntimeError("MCP process not started")
 
-        # Real implementation would marshal a JSON-RPC request to MCP server here.
-        # For now, raise to signal incomplete integration if fake mode is off.
-        raise RuntimeError("Real MCP STDIO integration not implemented in Phase-1. Enable fake mode or mock in tests.")
+        req = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "post_to_facebook",
+            "params": {"message": message},
+        }
+        payload = (json.dumps(req) + "\n").encode("utf-8")
+        self.proc.stdin.write(payload)
+        await self.proc.stdin.drain()
+
+        try:
+            line = await asyncio.wait_for(self.proc.stdout.readline(), timeout=30)
+        except asyncio.TimeoutError:
+            return PostResult(success=False, post_id=None, page_id=page_id, error="Timeout waiting for MCP response")
+
+        try:
+            resp = json.loads(line.decode("utf-8"))
+        except JSONDecodeError:
+            return PostResult(success=False, post_id=None, page_id=page_id, error=f"Invalid MCP response: {line!r}")
+
+        if "error" in resp:
+            return PostResult(success=False, post_id=None, page_id=page_id, error=str(resp["error"]))
+
+        result = resp.get("result", {})
+        post_id = result.get("id") or result.get("post_id") or result.get("result") or result.get("data")
+        return PostResult(success=True, post_id=str(post_id) if post_id is not None else None, page_id=page_id, error=None)
 
