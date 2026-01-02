@@ -39,7 +39,10 @@ cd facebook_agent
 docker build -t fb-agent .
 docker run --rm \
   -e OPENAI_API_KEY=your_key \
+  -e MCP_FAKE_MODE=0 \
   -v $(pwd)/data/logs:/data/logs \
+  -v /path/to/id_rsa:/root/.ssh/id_rsa:ro \
+  -v /path/to/known_hosts:/root/.ssh/known_hosts:ro \
   fb-agent
 ```
 
@@ -50,8 +53,8 @@ Schedule every 30 minutes:
 ```
 
 ## Notes
-- MCP command/args are read from `config/global.json` (mounted under `/app/facebook_agent/config` in the image).
-- Logging appends to CSV (`/data/logs/posts_log.csv`).
+- MCP command/args are read from `config/global.json` (SSH into MCP server). Ensure SSH keys/known_hosts are available in the container.
+- Logging appends to CSV (`/data/logs/posts_log.csv`); mount `/data/logs` to persist.
 - Instagram config is accepted but ignored in Phase 1.
-- MCP client ships with a `fake` mode by default (`MCP_FAKE_MODE=1`). Set `MCP_FAKE_MODE=0` to attempt real MCP STDIO integration once available.
+- MCP client ships with a `fake` mode by default (`MCP_FAKE_MODE=1`). Set `MCP_FAKE_MODE=0` to talk to the MCP server over STDIO.
 

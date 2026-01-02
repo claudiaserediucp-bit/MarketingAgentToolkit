@@ -19,11 +19,14 @@ LOG_HEADER = [
 
 
 def ensure_log_file(log_path: Path) -> None:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    if not log_path.exists():
-        with log_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(LOG_HEADER)
+    try:
+        log_path.parent.mkdir(parents=True, exist_ok=True)
+        if not log_path.exists():
+            with log_path.open("w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(LOG_HEADER)
+    except Exception as exc:  # pragma: no cover - defensive
+        raise RuntimeError(f"Cannot create or write log file at {log_path}: {exc}") from exc
 
 
 def append_log(

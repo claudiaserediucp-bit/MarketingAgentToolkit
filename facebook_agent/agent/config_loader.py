@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Dict, Tuple
+from zoneinfo import ZoneInfo
 
 from .models import AgentsConfig, ClientConfig, ClientsRoot, GlobalConfig
 
@@ -33,7 +34,16 @@ def load_clients(base_dir: Path) -> Tuple[ClientConfig, ...]:
 
     clients: list[ClientConfig] = []
     for path in sorted(clients_dir.glob("*.json")):
-        clients.append(ClientConfig.model_validate(load_json(path)))
+        cfg = ClientConfig.model_validate(load_json(path))
+        # Validate timezone
+        try:
+            ZoneInfo(cfg.tz_name)
+        except Exception as exc:
+            raise ValueError(f"Invalid timezone '{cfg.tz_name}' in {path}") from exc
+        # Validate page id presence
+        if not cfg.platforms.facebook.page_id:
+            raise ValueError(f"Missing facebook.page_id for client '{cfg.client_id}' in {path}")
+        clients.append(cfg)
     return tuple(clients)
 
 
