@@ -1,0 +1,5 @@
+timestamp_iso,client_id,slot_id,campaign,platform,page_id,post_id,status,error
+2026-01-02T08:03:30.249116,example_client,morning_slot,awareness,facebook,123456789,,failed,Timeout waiting for MCP response
+2026-01-02T08:04:04.537255,marketing_ai,daily_morning,ai_promo,facebook,915933604941253,,failed,Timeout waiting for MCP response
+2026-01-02T08:22:54.631015,example_client,morning_slot,awareness,facebook,123456789,,failed,Timeout waiting for MCP response
+2026-01-02T08:23:26.654745,marketing_ai,daily_morning,ai_promo,facebook,915933604941253,,failed,Timeout waiting for MCP response
