@@ -1,0 +1,53 @@
+{
+  "client_id": "example_client",
+  "display_name": "Patiseria Urbană",
+  "agent_id": "social_default",
+  "business": {
+    "niche": "patiserie artizanală",
+    "city": "Cluj-Napoca",
+    "language": "ro"
+  },
+  "platforms": {
+    "facebook": {
+      "enabled": true,
+      "page_id": "123456789"
+    },
+    "instagram": {
+      "enabled": false,
+      "ig_business_id": null
+    }
+  },
+  "schedule": {
+    "timezone": "Europe/Bucharest",
+    "slots": [
+      {
+        "id": "morning_slot",
+        "days_of_week": [1, 3, 5],
+        "time": "09:00",
+        "platforms": ["facebook"],
+        "campaign": "awareness"
+      },
+      {
+        "id": "evening_slot",
+        "days_of_week": [2, 4],
+        "time": "18:30",
+        "platforms": ["facebook"],
+        "campaign": "promo"
+      }
+    ]
+  },
+  "campaigns": {
+    "awareness": {
+      "objective": "Crește notorietatea brandului",
+      "notes": "Punctează ingredientele locale și prospețimea."
+    },
+    "promo": {
+      "objective": "Promovează ofertele săptămânii",
+      "notes": "Menționează discounturile actuale."
+    }
+  },
+  "guardrails": {
+    "max_posts_per_day": 2
+  }
+}
+
