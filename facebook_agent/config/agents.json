@@ -7,6 +7,14 @@
       "style_notes": "clar, concis, call-to-action subtil",
       "content_mix": "educational, promo, local highlights",
       "max_chars": 400
+    },
+    "marketing_ai": {
+      "name": "Marketing AI",
+      "language": "ro",
+      "tone": "încrezător, pragmatic, orientat pe beneficii",
+      "style_notes": "clar, structură scurtă, evidențiază automatizări și rezultate",
+      "content_mix": "promoții pentru servicii AI, automatizare, studii de caz",
+      "max_chars": 400
     }
   }
 }
