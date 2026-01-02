@@ -1,0 +1,53 @@
+{
+  "client_id": "marketing_ai",
+  "display_name": "Marketing AI",
+  "agent_id": "marketing_ai",
+  "business": {
+    "niche": "servicii AI pentru marketing",
+    "city": "București",
+    "language": "ro"
+  },
+  "platforms": {
+    "facebook": {
+      "enabled": true,
+      "page_id": "915933604941253"
+    },
+    "instagram": {
+      "enabled": false,
+      "ig_business_id": null
+    }
+  },
+  "schedule": {
+    "timezone": "Europe/Bucharest",
+    "slots": [
+      {
+        "id": "daily_morning",
+        "days_of_week": [1, 2, 3, 4, 5],
+        "time": "09:00",
+        "platforms": ["facebook"],
+        "campaign": "ai_promo"
+      },
+      {
+        "id": "daily_evening",
+        "days_of_week": [2, 4],
+        "time": "18:30",
+        "platforms": ["facebook"],
+        "campaign": "ai_value"
+      }
+    ]
+  },
+  "campaigns": {
+    "ai_promo": {
+      "objective": "Promovează serviciile de marketing AI și automatizare",
+      "notes": "Scoate în evidență eficiența, reducerea costurilor și creșterea conversiilor."
+    },
+    "ai_value": {
+      "objective": "Educație despre beneficii AI în marketing",
+      "notes": "Include exemple și mini-studii de caz."
+    }
+  },
+  "guardrails": {
+    "max_posts_per_day": 2
+  }
+}
+

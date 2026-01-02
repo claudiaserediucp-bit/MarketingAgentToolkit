@@ -1,0 +1,27 @@
+{
+  "timezone": "Europe/Bucharest",
+  "llm": {
+    "provider": "openai",
+    "model": "gpt-4o-mini",
+    "max_tokens": 256,
+    "temperature": 0.7
+  },
+  "scheduler": {
+    "tick_minutes": 30,
+    "tolerance_minutes": 15
+  },
+  "facebook_mcp": {
+    "command": "ssh",
+    "args": [
+      "-p",
+      "1313",
+      "adiciok@ds2018",
+      "cd /volume1/docker/facebook-mcp/facebook-mcp-server && docker-compose run --rm facebook-mcp"
+    ]
+  },
+  "logging": {
+    "type": "csv",
+    "file": "/data/logs/posts_log.csv"
+  }
+}
+
