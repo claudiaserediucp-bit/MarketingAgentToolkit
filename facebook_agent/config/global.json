@@ -11,12 +11,13 @@
     "tolerance_minutes": 15
   },
   "facebook_mcp": {
-    "command": "ssh",
+    "command": "docker",
     "args": [
-      "-p",
-      "1313",
-      "adiciok@192.168.0.205",
-      "cd /volume1/docker/facebook-mcp/facebook-mcp-server && docker-compose run --rm facebook-mcp"
+      "exec",
+      "-i",
+      "facebook-mcp",
+      "python",
+      "server.py"
     ]
   },
   "logging": {

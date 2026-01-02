@@ -274,3 +274,6 @@ def bulk_hide_comments(comment_ids: list[str]) -> list[dict[str, Any]]:
     """Hide multiple comments by ID."""
     return manager.bulk_hide_comments(comment_ids)
 
+
+if __name__ == "__main__":
+    mcp.run()

@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  # Facebook MCP Server - exposes tools over stdio/SSE
+  facebook-mcp:
+    build:
+      context: ../MCP
+      dockerfile: Dockerfile
+    container_name: facebook-mcp
+    environment:
+      FACEBOOK_ACCESS_TOKEN: ${FACEBOOK_ACCESS_TOKEN}
+      FACEBOOK_PAGE_ID: ${FACEBOOK_PAGE_ID}
+    networks:
+      - agent-net
+    command: ["python", "-m", "mcp.server.stdio", "server:mcp"]
+    stdin_open: true
+    tty: true
+
+  # Marketing Agent - generates content and posts via MCP
+  fb-agent:
+    build: .
+    container_name: fb-agent
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      MCP_FAKE_MODE: "0"
+    volumes:
+      - /volume1/data/logs:/data/logs
+    depends_on:
+      - facebook-mcp
+    networks:
+      - agent-net
+    command: ["python", "-m", "facebook_agent.agent.main"]
+
+networks:
+  agent-net:
+    driver: bridge
+
